@@ -1,0 +1,807 @@
+﻿/**
+ * Creates a new instance of a Report view model prototype.
+ *
+ * @constructor
+ * @this                     The newly created prototype instance.
+ * @param iFormatDate        The function converting a javascript Date object to a readable string.
+ * @param decimalDigitsInEpc The number of digits in the EPC1 and EPC2 coefficients, typically 3 or 4.
+ * @param iMoment            The function representing the Moment.JS library or equivalent.
+ * @param options            The object containing additional options.
+ */
+function ReportViewModel(iFormatDate, decimalDigitsInEpc, iMoment, options)
+{
+    var self = this;
+    var refDataFetchedCacheKey = "refDataFetched";
+    var iGetUtcDate = function ()
+    {
+        var aLocal = new Date();
+        return new Date(aLocal.getTime() + aLocal.getTimezoneOffset() * 60000);
+    },
+
+    iGetOption = function(key)
+        { return options ? options[key] : null; };
+
+    self.selectedDateRange = ko.observable();
+    self.selectedDateRange.subscribe( function(newValue) { if(newValue) newValue.action(); });
+    self.startDate = ko.observable();
+    self.endDate = ko.observable();
+
+    self.dateRanges = [
+        {
+            name: "Today",
+            action: function()
+            {
+                var aDate = iGetUtcDate();
+                self.endDate( iFormatDate(aDate) );
+                self.startDate( iFormatDate(aDate) );
+            }
+        },
+        {
+            name: "Yesterday",
+            action: function()
+            {
+                var aDate = iGetUtcDate();
+                aDate.setDate(aDate.getDate() - 1);
+
+                self.endDate(iFormatDate(aDate));
+                self.startDate(iFormatDate(aDate));
+            }
+        },
+        {
+            name: "Last 3 days",
+            action: function ()
+            {
+                var aEnd = iGetUtcDate();
+                var aStart = new Date(aEnd);
+                aStart.setDate(aStart.getDate() - 2);
+                self.endDate(iFormatDate(aEnd));
+                self.startDate(iFormatDate(aStart));
+            }
+        },
+        {
+            name: "Last 7 days",
+            action: function()
+            {
+                var aEnd = iGetUtcDate();
+
+                var aStart = new Date(aEnd);
+                aStart.setDate(aStart.getDate() - 6);
+
+                self.endDate( iFormatDate(aEnd) );
+                self.startDate( iFormatDate(aStart) );
+            }
+        },
+        {
+            name: "Last 14 days",
+            action: function ()
+            {
+                var aEnd = iGetUtcDate();
+                aEnd.setDate(aEnd.getDate());
+                var aStart = new Date(aEnd);
+                aStart.setDate(aStart.getDate() - 13);
+
+                self.endDate(iFormatDate(aEnd));
+                self.startDate(iFormatDate(aStart));
+            }
+        },
+        {
+            name: "This month",
+            action: function()
+            {
+                var aEnd = iGetUtcDate();
+                var aStart = new Date(aEnd.getFullYear(), aEnd.getMonth(), 1);
+                self.endDate(iFormatDate(aEnd));
+                self.startDate(iFormatDate(aStart));
+            }
+        },
+        {
+            name: "Last month",
+            action: function()
+            {
+                var aEnd = iGetUtcDate();
+                aEnd = new Date(aEnd.getFullYear(), aEnd.getMonth(), 0);
+                var aStart = new Date(aEnd.getFullYear(), aEnd.getMonth(), 1);
+                self.endDate(iFormatDate(aEnd));
+                self.startDate(iFormatDate(aStart));
+            }
+        },
+		{
+			name: "Last 6 months",
+			action: function ()
+			{
+				var aEnd = iGetUtcDate();
+				aEnd = new Date(aEnd.getFullYear(), aEnd.getMonth(), 0);
+				var aStart = new Date(aEnd.getFullYear(), aEnd.getMonth() - 5, 1);
+				self.endDate(iFormatDate(aEnd));
+				self.startDate(iFormatDate(aStart));
+			}
+		},
+		{
+			name: "This year",
+			action: function ()
+			{
+				var aEnd = iGetUtcDate();
+				var aStart = new Date(aEnd.getFullYear(), 0, 1);
+				self.endDate(iFormatDate(aEnd));
+				self.startDate(iFormatDate(aStart));
+			}
+		},
+		{
+			name: "Last year",
+			action: function ()
+			{
+				var aEnd = iGetUtcDate();
+				aEnd = new Date(aEnd.getFullYear(), 0, 0);
+				var aStart = new Date(aEnd.getFullYear(), 0, 1);
+				self.endDate(iFormatDate(aEnd));
+				self.startDate(iFormatDate(aStart));
+			}
+		}
+    ];
+
+    var aTimeRanges = null;
+    if (iMoment)
+    {
+        var iSetRangeFromHourDifference = function (diff)
+        {
+            var aEnd = iMoment().add(2, "m");
+            var aSt = iMoment().subtract(diff, "h");
+
+            self.startDate(aSt.unix());
+            self.endDate(aEnd.unix());
+        };
+
+        aTimeRanges = [
+            {
+                name: "Last hour",
+                isTime: 1,
+                action: function () { iSetRangeFromHourDifference(1); }
+            },
+            {
+                name: "Last 2 hours",
+                isTime: 1,
+                action: function () { iSetRangeFromHourDifference(2); }
+            },
+            {
+                name: "Last 3 hours",
+                isTime: 1,
+                action: function () { iSetRangeFromHourDifference(3); }
+            },
+            {
+                name: "Last 6 hours",
+                isTime: 1,
+                action: function () { iSetRangeFromHourDifference(6); }
+            },
+            {
+                name: "Last 12 hours",
+                isTime: 1,
+                action: function () { iSetRangeFromHourDifference(12); }
+            }
+        ];
+
+        self.dateRanges = aTimeRanges.concat(self.dateRanges);
+    };
+    
+    var iRestoreDefaultDateRange = function ()
+    {
+        var aDefIndex = iGetOption("defaultRangeIndex");
+        if (aDefIndex == null)
+            aDefIndex = iMoment ? aTimeRanges.length : 0;
+
+        self.selectedDateRange(self.dateRanges[aDefIndex]);
+    };
+    iRestoreDefaultDateRange();
+
+    var refDataFetchedDates = ko.computed(function () {
+        var refDataFetchedDates = JSON.parse(sessionStorage.getItem(refDataFetchedCacheKey));
+        return refDataFetchedDates ? refDataFetchedDates : {};
+    });
+
+    var tryGetOldestRefData = function() {
+        var oldestRefData;
+        var oldestRefDataFetched = Number.MAX_VALUE;
+        var curRefDataFetchedDates = refDataFetchedDates();
+
+        for (var refDataKey in curRefDataFetchedDates) {
+            var curValue = curRefDataFetchedDates[refDataKey];
+            if (curValue < oldestRefDataFetched) {
+                oldestRefDataFetched = curValue;
+                oldestRefData = refDataKey;
+            }
+        }
+        return oldestRefData;
+    };
+
+    var saveToCache = function(key, value, cache) {
+        var tempRefDataFetchedDates = refDataFetchedDates();
+        var aCur = tempRefDataFetchedDates;
+        try {
+            aCur[key] = new Date().getTime();
+            cache.setItem(refDataFetchedCacheKey, JSON.stringify(aCur));
+        } catch (e) {
+            return false;
+        }
+
+        try {
+            cache.setItem(key, value);
+        } catch (e) {
+            cache.setItem(refDataFetchedCacheKey, JSON.stringify(tempRefDataFetchedDates));
+            return false;
+        }
+        return true;
+    };
+
+    var trySaveToCache = function(key, value, cache) {
+
+        var isSaved = saveToCache(key, value, cache);
+
+        if (!isSaved) {
+            var tryToSave = true;
+            do {
+                var oldestRefData = tryGetOldestRefData();
+                if (oldestRefData) {
+                    cache.removeItem(oldestRefData);
+                    delete refDataFetchedDates()[oldestRefData];
+                    if (saveToCache(key, value, cache))
+                        tryToSave = false;
+                } else
+                    tryToSave = false;
+
+            } while (tryToSave)
+        }
+    };
+
+    var iRemoveStorage = function(cache, name){
+        cache.removeItem(name);
+        cache.removeItem(name + '_expires');
+    },
+    iGetStorage = function(cache, key) {
+        var now = Date.now();
+        var expires = cache.getItem(key + '_expires');
+        if (expires === undefined || expires === null) {
+            expires = 0;
+        }
+        if (expires < now) { // Expired
+            iRemoveStorage(cache, key);
+            return null;
+        } else {
+            var value = cache.getItem(key);
+            return value;
+        }
+    },
+    iSetStorage = function(cache, key, value, expires) {
+        if (expires === undefined || expires === null) {
+            expires = (60*60);  // default: 60 min
+        } else {
+            expires = Math.abs(expires); //make sure it's positive
+        }
+
+        var now = Date.now();
+        var schedule = now + expires*1000;
+        cache.setItem(key, value);
+        cache.setItem(key + '_expires', schedule);
+    };
+
+    self.dirName = function (){
+        var aLoc = window.location.pathname.split('/');
+        return aLoc[1];
+    };
+    self.cacheDateRanges = function (change)
+    {
+        var iComposeKey = function(name, suffix, dir)
+        {
+            var aRet = name + "_";
+            if (suffix)
+                aRet += suffix + "_";
+            return aRet + dir;
+        };
+
+        var dir = self.dirName(), suff = iGetOption("cacheSuffix"),
+            cSd = iComposeKey("R_startDate", suff, dir),
+            cEd = iComposeKey("R_endDate", suff, dir),
+            cRange = iComposeKey("R_selectedDateRange", suff, dir),
+            cache = window.sessionStorage;
+
+        if (!iGetStorage(cache, cSd) || !iGetStorage(cache, cEd) || !iGetStorage(cache, cRange) || change)
+        {
+            iSetStorage(cache, cRange, self.selectedDateRange().name, 1800);
+            iSetStorage(cache, cSd, self.startDate(), 1800);
+            iSetStorage(cache, cEd, self.endDate(), 1800);
+        }
+        else
+        {
+            var result = self.dateRanges.filter(function(el){
+                return el.name === iGetStorage(cache, cRange);
+            });
+            if (result.length > 0)
+            {
+                self.selectedDateRange(result[0]);
+                self.startDate(iGetStorage(cache, cSd));
+                self.endDate(iGetStorage(cache, cEd));
+            }
+            else
+            {
+                /* Switch from hours containing select to days only containing select */
+                iRestoreDefaultDateRange();
+            }
+        }
+    };
+
+    self.skipCache = ko.observable(false);
+    self.cacheDateRanges();
+
+    self.data = ko.observableArray([]);
+    self.hasReportData = ko.computed(function () { return !!self.data(); });
+
+    self.sortingField = ko.observable();
+    self.sortingOrder = ko.observable();
+
+    var queryCounter = 0;
+    self.isLoading = ko.observable(false);
+
+    self.sortBy = function(field)
+    {
+        var aSortDesc = field != self.sortingField() || self.sortingOrder() == "asc";
+
+        self.sortingField(field);
+        self.sortingOrder(aSortDesc ? "desc" : "asc");
+    };
+
+    self.classFor = function(field)                   
+    {
+        return field != self.sortingField()
+            ? "fa"
+            : "fa fa-sort-amount-" + self.sortingOrder();
+    };
+
+    self.searchFields = ko.observableArray();
+    self.searchString = ko.observable();
+    self.searchResult = ko.observable("");
+    self.search = function()
+    {
+        if (self.searchString() !== self.searchResult())
+            setTimeout(function() { self.searchResult(self.searchString()); }, 110);
+    };
+
+    self.visibleData = ko.computed(function ()
+    {
+    	// https://stackoverflow.com/questions/3115150/how-to-escape-regular-expression-special-characters-using-javascript
+	    function escapeRegExp(text) {
+		    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+	    };
+
+        var aS = self.searchResult(),
+            aFields = self.searchFields();
+
+        if (aFields.indexOf("id") === -1)
+            aFields.push("id");
+
+        var aDt = self.data();
+
+        if (!aS || !aDt || aDt.length === 0)
+            return aDt;
+
+        // Generate filtering based on the fields of the first object
+        var aFirst = aDt[0], aIsNumeric = $.isNumeric(aS), aNumerics = [], aStrings = [];
+
+        for (var i = 0; i < aFields.length; ++i)
+        {
+            var aFld = aFields[i];
+            if (aFld in aFirst)
+            {
+                if (aIsNumeric && typeof aFirst[aFld] === "number")
+                    aNumerics.push(aFld);
+                else if (typeof aFirst[aFld] === "string")
+                    aStrings.push(aFld);
+            }
+        }
+
+        if (aNumerics.length === 0 && aStrings.length === 0)
+            return [];
+
+        var iFilterByNumber = null, iFilterByString = null;
+
+        if (aStrings.length !== 0) {
+        	var aRX = new RegExp(escapeRegExp(aS), 'i');
+            if (aStrings.length === 1)
+            {
+                var aFld = aStrings[0];
+                iFilterByString = function (el) { return aRX.test(el[aFld]); };
+            }
+            else
+                iFilterByString = function(el)
+                {
+                    for (var i = 0; i < aStrings.length; ++i)
+                    {
+                        var aFld = aStrings[i];
+                        if (aRX.test(el[aFld]))
+                            return true;
+                    }
+                    return false;
+                };
+        }
+        if (aNumerics.length !== 0)
+        {
+            var aNum = new Number(aS);
+            if (aNumerics.length === 1)
+            {
+                var aFld = aNumerics[0];
+                iFilterByNumber = function(el) { return el[aFld] === aNum; };
+            }
+            else
+                iFilterByNumber = function(el)
+                {
+                    for (var i = 0; i < aNumerics.length; ++i)
+                    {
+                        var aFld = aNumerics[i];
+                        if (el[aFld] === aNum)
+                            return true;
+                    }
+                    return false;
+                };
+        }
+
+        var iAmPredicate = null;
+        if (!!iFilterByNumber && !!iFilterByString)
+            iAmPredicate = function(el) { return iFilterByNumber(el) || iFilterByString(el); };
+        else if (!!iFilterByNumber)
+            iAmPredicate = iFilterByNumber;
+        else
+            iAmPredicate = iFilterByString;
+
+        return aDt.filter(iAmPredicate);
+    });
+
+    self.sortDataAccordingToCurrentSettings = function(data)
+    {
+        if (!data || data.length < 2)
+            return data;
+
+        var aSortField = self.sortingField();
+        var aSortDesc = self.sortingOrder() == "desc";
+
+        var aFirst = data[0][aSortField];
+        if (typeof aFirst === "number")
+        {
+            var iCompare = aSortDesc
+                ? function (x, y) {
+                	if (isNaN(x[aSortField])) {
+						return 1;
+					} else if (isNaN(y[aSortField])) {
+						return -1;
+					}
+		            return y[aSortField] - x[aSortField];
+	            }
+                : function (x, y) {
+                	if (isNaN(y[aSortField])) {
+			            return 1;
+		            } else if (isNaN(x[aSortField])) {
+			            return -1;
+		            }
+		            return x[aSortField] - y[aSortField];
+	            };
+            return data.slice().sort(iCompare);
+        }
+        else if (typeof aFirst === "string")
+        {
+            var aMapped = data.map(function(el) { return { key: el[aSortField].toLowerCase(), value: el }; });
+            var iCompare = aSortDesc
+                ? function(x,y) { return y.key < x.key ? -1 : y.key > x.key ? 1 : 0; }
+                : function(x,y) { return y.key > x.key ? -1 : y.key < x.key ? 1 : 0; };
+
+            return aMapped.sort(iCompare).map(function(el) { return el.value; });
+        }
+        else
+            return data;
+    };
+
+    self.sortedData = ko.computed(function ()
+        { return self.sortDataAccordingToCurrentSettings(self.visibleData()); });
+
+    self.classForName = ko.computed(function () { return self.classFor("name"); });
+    self.classForVisits = ko.computed(function () { return self.classFor("visits"); });
+    self.classForUniques = ko.computed(function () { return self.classFor("uniques"); });
+    self.classForClicks = ko.computed(function () { return self.classFor("clicks"); });
+    self.classForSales = ko.computed(function () { return self.classFor("sales"); });
+    self.classForRatio = ko.computed(function () { return self.classFor("ratio"); });
+    self.classForCr = ko.computed(function () { return self.classFor("cr"); });
+    self.classForCtr = ko.computed(function () { return self.classFor("ctr"); });
+    self.classForEpc1 = ko.computed(function () { return self.classFor("epc1"); });
+    self.classForEpc2 = ko.computed(function () { return self.classFor("epc2"); });
+    self.classForEPM = ko.computed(function () { return self.classFor("epm"); });
+    self.classForAmount = ko.computed(function () { return self.classFor("amount"); });
+    self.classForAp = ko.computed(function () { return self.classFor("ap"); });
+
+    self.isDateRangeVisible = ko.pureComputed(function () { return !self.selectedDateRange().isTime; });
+
+    self.datePickerOptions = {
+        changeMonth: true,
+        changeYear: true,
+        minDate: new Date(2015, 0, 1),
+        maxDate: iGetUtcDate(),
+        defaultDate: "-0d",
+        firstDay: 1,
+        dateFormat: "yy-mm-dd"
+    };
+
+    self.sumByField = function(field)
+    {
+        var d = self.visibleData();
+
+        if (!d || d.length == 0)
+            return 0;
+
+        var total = 0;
+        for (var i = 0; i < d.length; i++ ) {
+            total += d[i][field];
+        }
+        return total;
+    };
+
+    self.averageByField = function (field, digits) {
+        var d = self.visibleData();
+
+        if (!d || d.length == 0)
+            return 0;
+
+        var total = 0;
+        for (var i = 0; i < d.length; i++ ) {
+            total += d[i][field];
+        }
+        var avg = total / d.length;
+        return digits ? avg.toFixed(digits) : avg;
+    };
+
+    self.computeCtr = function (clicks, uniques)
+        { return clicks == 0 || uniques == 0 ? 0 : clicks / uniques * 100; };
+
+    self.computeEpc = function(amount, visits)
+        { return amount == 0 ? 0 : amount / visits; };
+
+    var iComputeCr = function (sales, clicks)
+        { return clicks == 0 || sales == 0 ? 0 : sales / clicks * 100; };
+
+    self.iComputeRate = function (totalCost, totalRevenue)
+    { return totalCost == 0 || totalRevenue == 0 ? 0.00 : totalCost / totalRevenue};
+
+    var iFormatCr = function(cr)
+        { return cr.toFixed(2) + "%"; };
+
+    var iFormatRatio = function(sales, clicks)
+    {
+        if (clicks == 0)
+            return "0:1";
+        else if (sales == 0)
+            return "∞:1";
+        else
+            return "1:" + Math.ceil(clicks / sales).toString();
+    };
+
+    self.formatCtr = function(ctr)
+        { return ctr.toFixed(2) + "%"; };
+
+    self.formatEpc = function(epc)
+    {
+        if (isFinite(epc))
+            return epc.toFixed(decimalDigitsInEpc);
+        else
+            return "∞";
+    };
+
+    self.formatAmount = function (amount)
+        { return "$" + amount.toFixed(2) };
+
+    self.addComputedFields = function (el)
+    {
+        el.cr = iComputeCr(el.sales, el.clicks);
+        el.crFormatted = iFormatCr(el.cr);
+        el.ratio = el.sales / el.clicks;
+        el.ratioFormatted = iFormatRatio(el.sales, el.clicks);
+        el.ctr = self.computeCtr(el.clicks, el.uniques);
+        el.ctrFormatted = self.formatCtr(el.ctr);
+
+        if (el.amount !== undefined && el.amount !== null)
+        {
+            el.epc1 = self.computeEpc(el.amount, el.uniques);
+            el.epc1Formatted = self.formatEpc(el.epc1);
+            el.epc2 = self.computeEpc(el.amount, el.clicks);
+            el.epc2Formatted = self.formatEpc(el.epc2);
+            el.epm = el.epc1 * 1000;
+            el.epmFormatted = self.formatEpc(el.epm);
+            el.amountFormatted = self.formatAmount(el.amount);
+            el.ap = el.sales === 0 ? 0 : el.amount / el.sales;
+            el.apFormatted = self.formatAmount(el.ap);
+        }
+
+        if (el.registrationscount !== undefined && el.registrationscount !== null) {
+	        el.registrationsFormatted = el.registrationscount < 0 ? 'N/A' : el.registrationscount;
+        }
+
+        return el;
+    };
+
+    self.visitsTotal = ko.computed(function () { return self.sumByField("visits"); });
+    self.uniquesTotal = ko.computed( function() { return self.sumByField("uniques"); });
+    self.clicksTotal = ko.computed( function() { return self.sumByField("clicks"); });
+    self.salesTotal = ko.computed( function() { return self.sumByField("sales"); });
+    self.crTotal = ko.computed( function() { return iComputeCr(self.salesTotal(), self.clicksTotal()); } );
+    self.crTotalFormatted = ko.computed( function() { return iFormatCr(self.crTotal()); } );
+    self.ratioTotalFormatted = ko.computed( function() { return iFormatRatio(self.salesTotal(), self.clicksTotal()); } );
+    self.apTotal = ko.computed( function() { return self.averageByField("ap"); });
+    self.apTotalFormatted = ko.computed( function() { return self.formatAmount( self.apTotal() ); });
+    self.amountTotal = ko.computed( function() { return self.sumByField("amount"); });
+    self.amountTotalFormatted = ko.computed( function() { return self.formatAmount( self.amountTotal() ); });
+    self.ctrTotal = ko.computed(function () { return self.computeCtr(self.clicksTotal(), self.uniquesTotal()); });
+    self.ctrTotalFormatted = ko.computed(function () { return self.formatCtr(self.ctrTotal()); });
+    self.epc1Total = ko.computed(function () { return self.computeEpc(self.amountTotal(), self.uniquesTotal()); });
+    self.epc1TotalFormatted = ko.computed(function () { return self.formatEpc(self.epc1Total()); });
+    self.epc2Total = ko.computed(function () { return self.computeEpc( self.amountTotal(), self.clicksTotal() ); });
+    self.epc2TotalFormatted = ko.computed(function () { return self.formatEpc( self.epc2Total() ); } );
+    self.epmTotal = ko.computed(function () { return self.epc1Total() * 1000 });
+    self.epmTotalFormatted = ko.computed(function () { return self.formatEpc(self.epmTotal()); });
+
+    self.updateDateRangesIfNecessary = function ()
+    {
+        var aSel = self.selectedDateRange();
+        if (aSel && aSel.isTime)
+            aSel.action();
+    };
+
+    self.enqueueJsonDataFetch = function (fnGetJson, url, params, fnHandler, sortingField, sortingOrder, skipDateCache)
+    {
+        var aI = ++queryCounter;
+        self.isLoading(true);
+
+        fnGetJson
+        (
+            url,
+            params,
+            function (data)
+            {
+                if (queryCounter != aI) return;
+
+                fnHandler(data);
+
+                if (!self.sortingField())
+                {
+                    self.sortingField(sortingField || "amount");
+                    self.sortingOrder(sortingOrder || "desc");
+                }
+            }
+        ).complete(function(data)
+        {
+            if (queryCounter == aI)
+            {
+                self.isLoading(false);
+
+                if (!skipDateCache)
+                    self.cacheDateRanges(1);
+            }
+        });
+    };
+
+    self.addRefData = function (from, to, txtLabel)
+    {
+        var aD = [{ id: null, name: txtLabel }];
+        to(aD.concat(from));
+    };
+
+    self.setupCarrierFiltering = function(selectedDevice, selectedCountry, availableCarriers, responder)
+    {
+        self.determineIfMobileOperator = function (id)
+            { return id == 2 || id == 3; };
+
+        var aIsShowingCarriers = ko.pureComputed(function ()
+        {
+            var aD = selectedDevice();
+            return aD && self.determineIfMobileOperator(aD.id);
+        }),
+
+        aAvailableCarriers = ko.pureComputed(function ()
+        {
+            var aC = self.getID(selectedCountry);
+            var aOps = availableCarriers();
+            if (aC == 0)
+                return aOps;
+            else
+                return aOps.filter(function(el)
+                {
+                    if (!el.id || el.v) return 1;
+                    else if (!el.cnt) return 0;
+                    else return el.cnt.indexOf(aC) >= 0;
+                });
+        });
+
+        responder(aIsShowingCarriers, aAvailableCarriers);
+    };
+
+    self.refData = function (cache, fetcher, url, reactor)
+    {
+        var aData = {};
+        var aMustFetch = "", aSep = "";
+
+        var aMaskIndex = url.lastIndexOf("/") + 1;
+        var aMask = url.substring(aMaskIndex);
+        var aEntries = aMask.split("_");
+        var aDirName = self.dirName();
+
+        for(var i = 0; i < aEntries.length; ++ i)
+        {
+            var prop = aEntries[i];
+            var aIt = cache.getItem("ReportVM_" + aDirName + "_" + prop);
+            if (aIt)
+                aData[prop] = JSON.parse(aIt);
+            else
+            {
+                aMustFetch = aMustFetch + aSep + prop;
+                aSep = "_";
+            }
+        }
+
+        if (aMustFetch.length > 0)
+        {
+            fetcher(url.substring(0,aMaskIndex) + aMustFetch, function (data)
+            {
+                for (var prop in data)
+                {
+                    aData[prop] = data[prop];
+                    trySaveToCache("ReportVM_" + aDirName + "_" + prop, JSON.stringify(aData[prop]), cache);
+                }
+                reactor(aData);
+            });
+        }
+        else
+        {
+            reactor(aData);
+        }
+    };
+
+    self.skimDefaultValueFromId = function (id, defaultId) {
+        return id !== defaultId ? id : undefined;
+    };
+
+    self.getNullableID = function(from)
+    {
+        var aObj = ko.isObservable(from) ? from() : from;
+        return aObj ? aObj.id : null;
+    };
+
+    self.getID = function (from)
+    {
+        return self.getNullableID(from) || 0;
+    };
+
+    // http://stackoverflow.com/a/901144
+    self.queryStringParam = function(name)
+    {
+        name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+        var regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
+        var results = regex.exec(location.search);
+        return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+    };
+
+    self.useDatesFromQueryString = function()
+    {
+        var startDateFromParam = self.queryStringParam("startDate");
+        var endDateFromParam = self.queryStringParam("endDate");
+
+        if (startDateFromParam && endDateFromParam) {
+            try {
+                //ensure date format
+                $.datepicker.parseDate("yy-mm-dd", startDateFromParam);
+                $.datepicker.parseDate("yy-mm-dd", endDateFromParam);
+
+                self.skipCache(true);
+                self.startDate(startDateFromParam);
+                self.endDate(endDateFromParam);
+            } catch (err) { }
+        }
+    };
+
+    self.setOptionStyling = function (option, item)
+    {
+        ko.applyBindingsToNode(option, {
+            text: item.parent > 0 ? " • " + item.name : item.name
+        }, item);
+    };
+}
